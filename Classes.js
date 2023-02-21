@@ -1,5 +1,9 @@
 class MLP {
     
+    input_nodes = [];
+    hidden_nodes = [];
+    output_nodes = [];
+
     // ex : 3 , [4 , 4] , 4
     constructor(n_inputs,n_outputs,n_hidden_arr = []){
         this.n_inputs = n_inputs;
@@ -29,7 +33,29 @@ class MLP {
 
     }
 
-    
+    feedforward(inputs){
+        this.input_nodes = inputs;
+        this.hidden_nodes = [];
+
+        if(this.n_hidden_arr.length > 0){
+            this.hidden_nodes.push((MMath.mat_mult([this.input_nodes],this.weights[0])).map(this.activate));
+            
+            for (let i = 0; i < this.n_hidden_arr.length - 1; i++) {
+                this.hidden_nodes.push((MMath.mat_mult([this.hidden_nodes[i]],this.weights[i + 1])).map(this.activate));                
+            }
+
+            this.output_nodes = (MMath.mat_mult([this.hidden_nodes[this.hidden_nodes.length - 1]],this.weights[this.weights.length - 1])).map(this.activate);
+
+        }
+        else{
+            this.output_nodes = (MMath.mat_mult([this.input_nodes],this.weights[0])).map(this.activate);
+        }
+
+    }
+
+    backward(actual_outputs){
+        
+    }
 }
 
 class MMath{
@@ -51,7 +77,7 @@ class MMath{
     // if(Array.isArray(m1[0]) && Array.isArray(m2[0])) return this.dot_product(m1,m2); 
 
     static mat_mult(m1,m2){
-        
+
         if(m1[0].length != m2.length) throw("Wrong Array sizes",m1,m2);
 
         let res = [];
@@ -174,5 +200,25 @@ class MMath{
         }
       
         return res;
+    }
+
+    static transpose(mat){
+
+        if(!Array.isArray(mat[0])) mat = [mat];
+        
+        let result = [];
+        
+        for(let i = 0; i < mat[0].length; i++){
+            let row = [];
+            for(let j = 0; j < mat.length; j++){
+                row.push(mat[j][i]);
+            }
+
+            result.push(row);
+        }
+
+        if(result.length == 1) result = result[0];
+
+        return result;
     }
 }
