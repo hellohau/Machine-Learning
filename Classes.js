@@ -367,3 +367,5 @@ class MMath{
         return res;
     }
 }
+
+module.exports = {MLP,MMath};
