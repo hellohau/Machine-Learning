@@ -3,6 +3,7 @@ class MLP {
     input_nodes = [];
     hidden_nodes = [];
     output_nodes = [];
+    learning_rate = 0.1;
 
     // ex : 3 , [4 , 4] , 4
     constructor(n_inputs,n_outputs,n_hidden_arr = []){
@@ -11,6 +12,7 @@ class MLP {
         this.n_outputs = n_outputs;
 
         this.initialize_weights();
+        this.initialize_biases();
     }
 
     activate(x) {return 1/(1 + Math.exp(-x));}
@@ -20,6 +22,7 @@ class MLP {
 
         if(this.n_hidden_arr.length == 0){
             this.weights.push(MMath.xavier_init(this.n_inputs,this.n_outputs));
+
         }
         else{
             this.weights.push(MMath.xavier_init(this.n_inputs,this.n_hidden_arr[0]));
@@ -29,7 +32,19 @@ class MLP {
             }
 
             this.weights.push(MMath.xavier_init(this.n_hidden_arr[this.n_hidden_arr.length - 1],this.n_outputs));
+            
         }
+
+    }
+
+    initialize_biases(){
+        this.biases = [];
+
+        for (let i = 0; i < this.n_hidden_arr.length; i++) {
+            this.biases.push(MMath.mat_filled_num(1,this.n_hidden_arr[i],0));
+        }
+
+        this.biases.push(MMath.mat_filled_num(1,this.n_outputs,0));
 
     }
 
@@ -38,24 +53,107 @@ class MLP {
         this.hidden_nodes = [];
 
         if(this.n_hidden_arr.length > 0){
-            this.hidden_nodes.push((MMath.mat_mult([this.input_nodes],this.weights[0])).map(this.activate));
             
-            for (let i = 0; i < this.n_hidden_arr.length - 1; i++) {
-                this.hidden_nodes.push((MMath.mat_mult([this.hidden_nodes[i]],this.weights[i + 1])).map(this.activate));                
+            this.hidden_nodes.push((
+                MMath.mat_add(
+                    MMath.mat_mult(this.input_nodes,this.weights[0]),
+                    this.biases[0])
+                ).map(this.activate)
+            );
+            
+            for (let i = 1; i < this.n_hidden_arr.length; i++) {
+                
+                // this.hidden_nodes.push((
+                //     MMath.mat_add(
+                //         (MMath.mat_mult(this.hidden_nodes[i-1],this.weights[i])),
+                //         this.biases[i])
+                //     ).map(this.activate)
+                // );         
+
+                this.hidden_nodes.push((
+                    MMath.mat_add(
+                        (MMath.mat_mult(this.hidden_nodes[this.hidden_nodes.length - 1],this.weights[i])),
+                        this.biases[i])
+                    ).map(this.activate)
+                );         
+
             }
 
-            this.output_nodes = (MMath.mat_mult([this.hidden_nodes[this.hidden_nodes.length - 1]],this.weights[this.weights.length - 1])).map(this.activate);
+            this.output_nodes = 
+            (MMath.mat_add(
+                    MMath.mat_mult(this.hidden_nodes[this.hidden_nodes.length - 1],this.weights[this.weights.length - 1]),
+                    this.biases[this.biases.length-1]
+                )).map(this.activate);
 
         }
         else{
-            this.output_nodes = (MMath.mat_mult([this.input_nodes],this.weights[0])).map(this.activate);
+            this.output_nodes = (MMath.mat_add(MMath.mat_mult(this.input_nodes,this.weights[0]),this.biases[0])).map(this.activate);
+        }
+        
+        return this.output_nodes;
+    }
+
+    backprop(actual_outputs){
+
+        let bias_deltas   = [];
+        let weight_deltas = [];
+
+        // dL/da * da/dz
+        let output_error = MMath.mat_one_to_one_mult(
+                                MMath.mat_mult_num(
+                                    MMath.mat_sub(this.output_nodes,actual_outputs)
+                                    ,2),
+                                this.output_nodes.map((x) => {return x*(1-x);})
+        );
+        
+        bias_deltas.unshift(output_error);
+
+        //Take into account the hidden layer
+        if(this.n_hidden_arr.length > 0){
+
+            let curr_error = output_error;
+
+            for(let i = this.n_hidden_arr.length - 1; i >= 0; i--){
+
+                weight_deltas.unshift(MMath.mat_mult(
+                    MMath.transpose(this.hidden_nodes[i]),
+                    curr_error
+                ));
+                
+                curr_error = MMath.mat_one_to_one_mult(
+                    MMath.mat_mult(curr_error , MMath.transpose(this.weights[i + 1])),
+                    this.hidden_nodes[i].map((x) => {return x*(1-x);})
+                );
+                bias_deltas.unshift(curr_error);
+
+            }
+
+            weight_deltas.unshift(MMath.mat_mult(
+                MMath.transpose(this.input_nodes),
+                curr_error
+            ));
+
+        }
+        else{
+
+            weight_deltas.unshift(MMath.mat_mult(
+                MMath.transpose(this.input_nodes),
+                output_error
+            ));
+
+        }
+
+        // //Update the weights/biases with the deltas
+        for(let i = 0; i < this.weights.length; i++){
+
+            this.weights[i] = MMath.mat_sub(this.weights[i],MMath.mat_mult_num(weight_deltas[i],this.learning_rate));
+            this.biases[i] = MMath.mat_sub(this.biases[i],MMath.mat_mult_num(bias_deltas[i],this.learning_rate));
         }
 
     }
 
-    backward(actual_outputs){
-        
-    }
+
+
 }
 
 class MMath{
@@ -63,7 +161,7 @@ class MMath{
     static dot_product(m1,m2){
         
         //Test if the computation is possible
-        if(m1.length != m2.length) throw("Different Array sizes ",m1,m2);
+        if(m1.length != m2.length) {console.log(m1,m2); throw("Different Array sizes ");}
 
         let sum = 0;
         
@@ -78,7 +176,10 @@ class MMath{
 
     static mat_mult(m1,m2){
 
-        if(m1[0].length != m2.length) throw("Wrong Array sizes",m1,m2);
+        if(!Array.isArray(m1[0])) m1 = [m1];
+        if(!Array.isArray(m2[0])) m2 = [m2];
+
+        if(m1[0].length != m2.length) {console.log(m1,m2);throw("Wrong Array sizes");}
 
         let res = [];
 
@@ -97,18 +198,19 @@ class MMath{
                 row.push(sum);
             }
 
-            if(row.length == 1) row = row[0];
-
             res.push(row);
         }
 
-        if(res.length == 1) res = res[0];
-
+        if(res.length == 1 && Array.isArray(res[0])) res = res[0];
         return res;
     }
 
     static mat_add(m1,m2,add = 1){
-        if(m1.length != m2.length || m1[0].length != m2[0].length) throw("Wrong size arrays",m1,m2);
+        
+        if(!Array.isArray(m1[0])) m1 = [m1];
+        if(!Array.isArray(m2[0])) m2 = [m2];
+        
+        if(m1.length != m2.length || m1[0].length != m2[0].length) {console.log(m1,m2);throw("Wrong size arrays")};
 
         let res = [];
         for (let i = 0; i < m1.length; i++) {
@@ -118,10 +220,10 @@ class MMath{
                 else row.push(m1[i][j] - m2[i][j]);
             }
 
-            if(row.length == 1) row = row[0];
             res.push(row);
         }
 
+        if(res.length == 1 && Array.isArray(res[0])) res = res[0];
         return res;
     }
 
@@ -131,7 +233,10 @@ class MMath{
 
     static mat_add_num(m1,num,add = 1){
         
-        if(m1 == undefined || num == undefined || num == NaN) throw("Error Matrix add num",m1,num);
+        
+        if(!Array.isArray(m1[0])) m1 = [m1];
+        
+        if(m1 == undefined || num == undefined || num == NaN) {console.log(m1,num);throw("Error Matrix add num");}
 
         let res = [];
         for (let i = 0; i < m1.length; i++) {
@@ -141,15 +246,32 @@ class MMath{
                 else row.push(m1[i][j] - num);
             }
 
-            if(row.length == 1) row = row[0];
             res.push(row);
         }
 
+        if(res.length == 1 && Array.isArray(res[0])) res = res[0];
         return res;
     }
 
     static mat_sub_num(m1,num){
         return this.mat_add_num(m1,num,0);
+    }
+
+    static mat_mult_num(m1,num){
+        if(!Array.isArray(m1[0])) m1 = [m1];
+
+        let res = [];
+        for(let i = 0; i < m1.length; i++){
+            let row = [];
+            for(let j = 0; j < m1[0].length; j++){
+                row.push(m1[i][j] * num);
+            }
+
+            res.push(row);
+        }
+
+        if(res.length == 1 && Array.isArray(res[0])) res = res[0];
+        return res;
     }
     
     static rand_matrix(row,col){
@@ -169,7 +291,7 @@ class MMath{
         return res;
     }
 
-    static zero_matrix(row,col){
+    static mat_filled_num(row,col,num){
         
         if(row <= 0 || col <= 0) throw("Wrong row,col");
         
@@ -177,7 +299,7 @@ class MMath{
         for(let i = 0; i < row; i++){
             let row = [];
             for(let j = 0; j < col; j++){
-                row.push(0);
+                row.push(num);
             }
 
             res.push(row);
@@ -187,7 +309,8 @@ class MMath{
     }
 
     static xavier_init(n_inputs, n_outputs) {
-        const limit = Math.sqrt(6 / (n_inputs + n_outputs));
+        // const limit = Math.sqrt(6 / (n_inputs + n_outputs));
+        const limit = Math.sqrt(1 / (n_inputs));
         const res = [];
       
         for (let i = 0; i < n_inputs; i++) {
@@ -217,8 +340,30 @@ class MMath{
             result.push(row);
         }
 
-        if(result.length == 1) result = result[0];
+        if(result.length == 1 && Array.isArray(result[0])) result = result[0];
 
         return result;
+    }
+
+    static mat_one_to_one_mult(m1,m2){
+
+        if(!Array.isArray(m1[0])) m1 = [m1];
+        if(!Array.isArray(m2[0])) m2 = [m2];
+        
+        if(m1.length != m2.length || m1[0].length != m2[0].length) {console.log(m1,m2); throw("Matrices are different sizes for 1 to 1 mult");}
+
+        let res = [];
+        for (let i = 0; i < m1.length; i++) {
+            let row = [];
+            for (let j = 0; j < m1[0].length; j++) {
+                row.push(m1[i][j] * m2[i][j]);
+            }
+            
+            res.push(row);
+        }
+
+        if(res.length == 1 && Array.isArray(res[0])) res = res[0];
+
+        return res;
     }
 }
