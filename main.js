@@ -21,7 +21,7 @@ function train(dataset,mlp,min_cost){
         iteration++
         
         cost = sqr_sum/dataset.length;
-        console.log("Cost %d : ", iteration,cost);
+        // console.log("Cost %d : ", iteration,cost);
     }
 
     return iteration;
@@ -91,25 +91,25 @@ fs.readFile('../Machine-Learning/iris.data','utf8',(err,data) => {
     }
 
     let training_data = pick_random(test_data,0.9);
-    train(training_data,m,0.1);
-    test(test_data,m,0.1);
+    // train(training_data,m,0.1);
+    // test(test_data,m,0.1);
 
-    // let count = 0;
-    // let solve_count = 0;
-    // for (let j = 0; j < 100; j++) {;
-    //     let m = new Classes.MLP(4,3,[6]);
-    //     m.learning_rate = 0.01;
-    //     m.hidden_activation = "relu"
-    //     m.output_activation = "softmax";
+    let count = 0;
+    let solve_count = 0;
+    for (let j = 0; j < 500; j++) {;
+        let m = new Classes.MLP(4,3,[6]);
+        m.learning_rate = 0.0069;
+        m.hidden_activation = "relu"
+        m.output_activation = "softmax";
 
-    //     let it = train(training_data,m,0.1);
-    //     console.log("Iterations : ",it);
-    //     if(it < 300) {count++;solve_count+= it;}
-    //     // test(test_data,m,0.1);
-    // }
+        let it = train(training_data,m,0.1);
+        console.log("Iterations : ",it);
+        if(it < 300) {count++;solve_count+= it;}
+        // test(test_data,m,0.1);
+    }
 
-    // console.log("Count succeeded : %d",count);
-    // console.log("Average iteration : %d",solve_count/100);
+    console.log("Count succeeded : %d / %d",count,500);
+    console.log("Average iteration : %d",solve_count/500);
 
 
     // console.log(m);
