@@ -1,13 +1,15 @@
 const Classes = require('./Classes.js');
 const fs = require('fs');
 
-let m = new Classes.MLP(4,3,[5]);
-m.learning_rate = 0.1;
+let m = new Classes.MLP(4,3,[6]);
+m.learning_rate = 0.005;
+m.hidden_activation = "relu";
+m.output_activation = "softmax";
 
 function train(dataset,mlp,min_cost){
     let iteration = 0;
     let cost = 1;
-    while(cost > min_cost && iteration < 500) {
+    while(cost > min_cost && iteration < 300) {
         let sqr_sum = 0;
         for(let j = 0; j < dataset.length; j++){
             let out = mlp.feedforward(dataset[j].x);
@@ -16,9 +18,13 @@ function train(dataset,mlp,min_cost){
             sqr_sum += ((Classes.MMath.mat_sub(out,dataset[j].y)).map((x) => {return x*x;})).reduce((a,b) => a+b,0);
         }
 
+        iteration++
+        
         cost = sqr_sum/dataset.length;
-        console.log("Cost %d : ", iteration++,cost);
+        console.log("Cost %d : ", iteration,cost);
     }
+
+    return iteration;
 }
 
 function test(dataset,mlp,min_diff){
@@ -37,8 +43,8 @@ function test(dataset,mlp,min_diff){
 // let dataset = [{x:[0,0],y:[0,1]},{x:[1,0],y:[1,0]},{x:[0,1],y:[1,0]},{x:[1,1],y:[0,1]}];
 // let dataset = [{x:[0,0],y:[0]},{x:[1,0],y:[1]},{x:[0,1],y:[1]},{x:[1,1],y:[0]}];
 
-m.hidden_activation = "relu"
-m.output_activation = "sigmoid";
+// m.hidden_activation = "sigmoid"
+// m.output_activation = "softmax";
 
 // train(dataset,m,0.001);
 // test(dataset,m,0.1);
@@ -85,9 +91,26 @@ fs.readFile('../Machine-Learning/iris.data','utf8',(err,data) => {
     }
 
     let training_data = pick_random(test_data,0.9);
-
     train(training_data,m,0.1);
     test(test_data,m,0.1);
+
+    // let count = 0;
+    // let solve_count = 0;
+    // for (let j = 0; j < 100; j++) {;
+    //     let m = new Classes.MLP(4,3,[6]);
+    //     m.learning_rate = 0.01;
+    //     m.hidden_activation = "relu"
+    //     m.output_activation = "softmax";
+
+    //     let it = train(training_data,m,0.1);
+    //     console.log("Iterations : ",it);
+    //     if(it < 300) {count++;solve_count+= it;}
+    //     // test(test_data,m,0.1);
+    // }
+
+    // console.log("Count succeeded : %d",count);
+    // console.log("Average iteration : %d",solve_count/100);
+
 
     // console.log(m);
 });
@@ -104,4 +127,3 @@ function pick_random(arr,percent){
 
     return res;
 }
-
