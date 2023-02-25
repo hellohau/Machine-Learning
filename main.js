@@ -1,13 +1,13 @@
 const Classes = require('./Classes.js');
 const fs = require('fs');
 
-let m = new Classes.MLP(4,3,[3]);
+let m = new Classes.MLP(4,3,[5]);
 m.learning_rate = 0.1;
 
 function train(dataset,mlp,min_cost){
     let iteration = 0;
     let cost = 1;
-    while(cost > min_cost) {
+    while(cost > min_cost && iteration < 1000) {
         let sqr_sum = 0;
         for(let j = 0; j < dataset.length; j++){
             let out = mlp.feedforward(dataset[j].x);
@@ -34,6 +34,34 @@ function test(dataset,mlp,min_diff){
     console.log("Min error %f : Solved %d / %d",min_diff,count,dataset.length);
 }
 
+// let dataset = [{x:[0,0],y:[0,1]},{x:[1,0],y:[1,0]},{x:[0,1],y:[1,0]},{x:[1,1],y:[0,1]}];
+// let dataset = [{x:[0,0],y:[0]},{x:[1,0],y:[1]},{x:[0,1],y:[1]},{x:[1,1],y:[0]}];
+
+m.hidden_activation = "relu"
+m.output_activation = "sigmoid";
+
+// train(dataset,m,0.001);
+// test(dataset,m,0.1);
+
+// fs.readFile('../TestingStuff/CADJPY_historical_data 2020-2023.csv','utf8',(err,data) => {
+//     if(err){console.log(err);return;}
+
+//     let test_data = data.split('\n');
+//     test_data = test_data.map((x) => {return (((x.split(' ')[1]).split(',')).splice(1,5)).map((y => { return parseFloat(y);})) ;});
+
+//     test_data = test_data.map((x) => {
+//         let last = x.splice(-1,1);
+//         return {x:x,y:last};
+//     })
+
+//     let training_data = pick_random(test_data,0.8);
+
+//     train(training_data,m,0.1);
+//     test(test_data,m,0.1);
+
+//     console.log(m);
+// });
+
 fs.readFile('../TestingStuff/iris.data','utf8',(err,data) => {
     if(err){console.log(err);return;}
 
@@ -56,7 +84,7 @@ fs.readFile('../TestingStuff/iris.data','utf8',(err,data) => {
         test_data[i] = {x:test_arr.map((x) => {return parseFloat(x);}), y:last};
     }
 
-    let training_data = pick_random(test_data,125);
+    let training_data = pick_random(test_data,0.9);
 
     train(training_data,m,0.1);
     test(test_data,m,0.1);
@@ -64,9 +92,10 @@ fs.readFile('../TestingStuff/iris.data','utf8',(err,data) => {
     // console.log(m);
 });
 
-function pick_random(arr,num){
-    if(num > arr.length){console.log("Number bigger than array");return;}
+function pick_random(arr,percent){
+    if(percent > 1){console.log("Number bigger than array");return;}
 
+    let num = Math.ceil(percent * arr.length);
     let res = []; 
     for(let i = 0; i < num; i++){
         let index = Math.floor(Math.random() * arr.length);
@@ -75,6 +104,4 @@ function pick_random(arr,num){
 
     return res;
 }
-
-
 

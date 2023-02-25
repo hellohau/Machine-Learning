@@ -4,8 +4,10 @@ class MLP {
     hidden_nodes = [];
     output_nodes = [];
     learning_rate = 0.1;
+    hidden_activation = "relu";
+    output_activation = "sigmoid";
 
-    // ex : 3 , [4 , 4] , 4
+    // ex : 3 , 4 , [4 , 4] 
     constructor(n_inputs,n_outputs,n_hidden_arr = []){
         this.n_inputs = n_inputs;
         this.n_hidden_arr = n_hidden_arr;
@@ -15,7 +17,59 @@ class MLP {
         this.initialize_biases();
     }
 
-    activate(x) {return 1/(1 + Math.exp(-x));}
+    activate(x,activation_name) {
+        switch(activation_name){
+            case "relu":        
+                if(Array.isArray(x)) return x.map((y) => {return this.activate(y,activation_name);});
+                return x > 0 ? x : 0;
+            
+            case "sigmoid":
+                if(Array.isArray(x)) return x.map((y) => {return this.activate(y,activation_name);});
+                return 1/(1 + Math.exp(-x));
+            
+            case "softmax":
+                let max = Math.max(...x);
+                let exp_sum = (x.map((y) => {return Math.exp(y - max);})).reduce((a, b) => a + b, 0);
+            
+                return x.map((y) => {return Math.exp(y - max) / exp_sum;});
+            
+            default : console.trace("activation function name not found");
+                return;
+        }
+
+    }
+    
+    derivate_activate(x,activation_name){
+
+        switch(activation_name){
+            case "relu":        
+                if(Array.isArray(x)) return x.map((y) => {return this.derivate_activate(y,activation_name);});
+                return (x > 0 ? 1 : 0);
+            
+            case "sigmoid":
+                if(Array.isArray(x)) return x.map((y) => {return this.derivate_activate(y,activation_name);});
+                return x*(1-x);
+            
+            case "softmax":
+                let res = [];
+                for(let i = 0; i < x.length; i++){
+                    let row = [];
+                    for(let j = 0; j < x.length; j++){
+                        if(i == j) row.push(x[i] * (1 - x[i]));
+                        else row.push((-x[i]) * x[j]);
+                    }
+            
+                    res.push(row);
+                }
+            
+                return res;
+            
+            default : console.trace("derivate activation function name not found");
+                return;
+        }
+
+
+    }
 
     initialize_weights(){
         this.weights = [];
@@ -54,40 +108,33 @@ class MLP {
 
         if(this.n_hidden_arr.length > 0){
             
-            this.hidden_nodes.push((
+            this.hidden_nodes.push(this.activate(
                 MMath.mat_add(
                     MMath.mat_mult(this.input_nodes,this.weights[0]),
                     this.biases[0])
-                ).map(this.activate)
+                ,this.hidden_activation)
             );
             
             for (let i = 1; i < this.n_hidden_arr.length; i++) {
-                
-                // this.hidden_nodes.push((
-                //     MMath.mat_add(
-                //         (MMath.mat_mult(this.hidden_nodes[i-1],this.weights[i])),
-                //         this.biases[i])
-                //     ).map(this.activate)
-                // );         
-
-                this.hidden_nodes.push((
+                   
+                this.hidden_nodes.push(this.activate(
                     MMath.mat_add(
                         (MMath.mat_mult(this.hidden_nodes[this.hidden_nodes.length - 1],this.weights[i])),
                         this.biases[i])
-                    ).map(this.activate)
+                    ,this.hidden_activation)
                 );         
 
             }
 
             this.output_nodes = 
-            (MMath.mat_add(
+            this.activate(MMath.mat_add(
                     MMath.mat_mult(this.hidden_nodes[this.hidden_nodes.length - 1],this.weights[this.weights.length - 1]),
                     this.biases[this.biases.length-1]
-                )).map(this.activate);
+                ),this.output_activation);
 
         }
         else{
-            this.output_nodes = (MMath.mat_add(MMath.mat_mult(this.input_nodes,this.weights[0]),this.biases[0])).map(this.activate);
+            this.output_nodes = this.activate(MMath.mat_add(MMath.mat_mult(this.input_nodes,this.weights[0]),this.biases[0]),this.output_activation);
         }
         
         return this.output_nodes;
@@ -99,12 +146,25 @@ class MLP {
         let weight_deltas = [];
 
         // dL/da * da/dz
-        let output_error = MMath.mat_one_to_one_mult(
-                                MMath.mat_mult_num(
-                                    MMath.mat_sub(this.output_nodes,actual_outputs)
-                                    ,2),
-                                this.output_nodes.map((x) => {return x*(1-x);})
-        );
+        let output_error = null;
+        if(this.output_activation == "softmax"){
+            output_error = MMath.mat_mult(
+                MMath.mat_mult_num(
+                    MMath.mat_sub(this.output_nodes,actual_outputs)
+                    ,2),
+                this.derivate_activate(this.output_nodes,this.output_activation)
+            );
+        }else{
+            output_error = MMath.mat_one_to_one_mult(
+                MMath.mat_mult_num(
+                    MMath.mat_sub(this.output_nodes,actual_outputs)
+                    ,2),
+                this.derivate_activate(this.output_nodes,this.output_activation)
+            );
+        }
+
+        if(output_error == null) {console.trace("error, output_error not computed");throw("output_error");}
+
         
         bias_deltas.unshift(output_error);
 
@@ -122,7 +182,7 @@ class MLP {
                 
                 curr_error = MMath.mat_one_to_one_mult(
                     MMath.mat_mult(curr_error , MMath.transpose(this.weights[i + 1])),
-                    this.hidden_nodes[i].map((x) => {return x*(1-x);})
+                    this.derivate_activate(this.hidden_nodes[i],this.hidden_activation)
                 );
                 bias_deltas.unshift(curr_error);
 
@@ -161,7 +221,7 @@ class MMath{
     static dot_product(m1,m2){
         
         //Test if the computation is possible
-        if(m1.length != m2.length) {console.log(m1,m2); throw("Different Array sizes ");}
+        if(m1.length != m2.length) {console.trace(m1,m2); throw("Different Array sizes ");}
 
         let sum = 0;
         
@@ -179,7 +239,7 @@ class MMath{
         if(!Array.isArray(m1[0])) m1 = [m1];
         if(!Array.isArray(m2[0])) m2 = [m2];
 
-        if(m1[0].length != m2.length) {console.log(m1,m2);throw("Wrong Array sizes");}
+        if(m1[0].length != m2.length) {console.trace(m1,m2);throw("Wrong Array sizes");}
 
         let res = [];
 
@@ -210,7 +270,7 @@ class MMath{
         if(!Array.isArray(m1[0])) m1 = [m1];
         if(!Array.isArray(m2[0])) m2 = [m2];
         
-        if(m1.length != m2.length || m1[0].length != m2[0].length) {console.log(m1,m2);throw("Wrong size arrays")};
+        if(m1.length != m2.length || m1[0].length != m2[0].length) {console.trace(m1,m2);throw("Wrong size arrays")};
 
         let res = [];
         for (let i = 0; i < m1.length; i++) {
@@ -236,7 +296,7 @@ class MMath{
         
         if(!Array.isArray(m1[0])) m1 = [m1];
         
-        if(m1 == undefined || num == undefined || num == NaN) {console.log(m1,num);throw("Error Matrix add num");}
+        if(m1 == undefined || num == undefined || num == NaN) {console.trace(m1,num);throw("Error Matrix add num");}
 
         let res = [];
         for (let i = 0; i < m1.length; i++) {
@@ -350,7 +410,7 @@ class MMath{
         if(!Array.isArray(m1[0])) m1 = [m1];
         if(!Array.isArray(m2[0])) m2 = [m2];
         
-        if(m1.length != m2.length || m1[0].length != m2[0].length) {console.log(m1,m2); throw("Matrices are different sizes for 1 to 1 mult");}
+        if(m1.length != m2.length || m1[0].length != m2[0].length) {console.trace(m1,m2); throw("Matrices are different sizes for 1 to 1 mult");}
 
         let res = [];
         for (let i = 0; i < m1.length; i++) {
@@ -363,6 +423,23 @@ class MMath{
         }
 
         if(res.length == 1 && Array.isArray(res[0])) res = res[0];
+
+        return res;
+    }
+
+    static diag(mat){
+
+        let res = [];
+        
+        for(let i = 0; i < mat.length; i++){
+            let row = [];
+            for(let j = 0; j < mat.length; j++){
+                if(i == j) row.push(mat[i]);
+                else row.push(0); 
+            }
+
+            res.push(row);
+        }
 
         return res;
     }
