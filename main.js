@@ -34,14 +34,14 @@ function test(dataset,mlp,min_diff){
     console.log("Min error %f : Solved %d / %d",min_diff,count,dataset.length);
 }
 
-fs.readFile('../TestingStuff/iris.data','utf8',(err,data) => {
+fs.readFile('../Machine-Learning/iris.data','utf8',(err,data) => {
     if(err){console.log(err);return;}
 
     let test_data = data.split('\n');
 
     for (let i = 0; i < test_data.length; i++) {
         let test_arr = test_data[i].split(',');
-        let last = test_arr.splice(-1,1)[0];
+        let last = test_arr.splice(-1,1)[0].replace(/(\r\n|\n|\r)/gm, "");;
         switch(last){
             case 'Iris-setosa': last = [1,0,0];
                 break;
