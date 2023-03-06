@@ -1,3 +1,3 @@
 # Machine-Learning
 
-This is the current main project line.
+This is the current branch for RNN.

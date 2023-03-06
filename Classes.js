@@ -2,13 +2,18 @@ class MLP {
     
     input_nodes = [];
     hidden_nodes = [];
+    hidden_nodes_prev = [];
     output_nodes = [];
     learning_rate = 0.1;
-    hidden_activation = "relu";
+    hidden_activation = "tanh";
     output_activation = "sigmoid";
 
     // ex : 3 , 4 , [4 , 4] 
-    constructor(n_inputs,n_outputs,n_hidden_arr = []){
+    constructor(n_inputs,n_hidden_arr = [],n_outputs){
+        if(n_inputs == 0 || n_hidden_arr.length == 0|| n_outputs == 0){
+            console.trace("Size null of input/hidden/output");throw("error");
+        }
+
         this.n_inputs = n_inputs;
         this.n_hidden_arr = n_hidden_arr;
         this.n_outputs = n_outputs;
@@ -18,13 +23,14 @@ class MLP {
     }
 
     activate(x,activation_name) {
+
+        if(Array.isArray(x) && activation_name != "softmax") return x.map((y) => {return this.activate(y,activation_name);});
+        
         switch(activation_name){
             case "relu":        
-                if(Array.isArray(x)) return x.map((y) => {return this.activate(y,activation_name);});
                 return x > 0 ? x : 0;
             
             case "sigmoid":
-                if(Array.isArray(x)) return x.map((y) => {return this.activate(y,activation_name);});
                 return 1/(1 + Math.exp(-x));
             
             case "softmax":
@@ -33,6 +39,9 @@ class MLP {
             
                 return x.map((y) => {return Math.exp(y - max) / exp_sum;});
             
+            case "tanh":
+                return (2 / (1 + Math.exp(-2 * x))) - 1;
+
             default : console.trace("activation function name not found");
                 return;
         }
@@ -40,14 +49,13 @@ class MLP {
     }
     
     derivate_activate(x,activation_name){
+        if(Array.isArray(x) && activation_name != "softmax") return x.map((y) => {return this.derivate_activate(y,activation_name);});
 
         switch(activation_name){
             case "relu":        
-                if(Array.isArray(x)) return x.map((y) => {return this.derivate_activate(y,activation_name);});
                 return (x > 0 ? 1 : 0);
             
             case "sigmoid":
-                if(Array.isArray(x)) return x.map((y) => {return this.derivate_activate(y,activation_name);});
                 return x*(1-x);
             
             case "softmax":
@@ -64,6 +72,9 @@ class MLP {
             
                 return res;
             
+            case "tanh":
+                return (1-Math.pow(x,2));
+            
             default : console.trace("derivate activation function name not found");
                 return;
         }
@@ -73,22 +84,17 @@ class MLP {
 
     initialize_weights(){
         this.weights = [];
+        this.weights_previous = [];
 
-        if(this.n_hidden_arr.length == 0){
-            this.weights.push(MMath.xavier_init(this.n_inputs,this.n_outputs));
+        this.weights.push(MMath.xavier_init(this.n_inputs,this.n_hidden_arr[0]));
+        this.weights_previous.push(MMath.xavier_init(this.n_hidden_arr[0],this.n_hidden_arr[0]));
 
-        }
-        else{
-            this.weights.push(MMath.xavier_init(this.n_inputs,this.n_hidden_arr[0]));
-
-            for(let i = 1; i < this.n_hidden_arr.length; i++){
-                this.weights.push(MMath.xavier_init(this.n_hidden_arr[i-1],this.n_hidden_arr[i]));
-            }
-
-            this.weights.push(MMath.xavier_init(this.n_hidden_arr[this.n_hidden_arr.length - 1],this.n_outputs));
-            
+        for(let i = 1; i < this.n_hidden_arr.length; i++){
+            this.weights.push(MMath.xavier_init(this.n_hidden_arr[i-1],this.n_hidden_arr[i]));
+            this.weights_previous.push(MMath.xavier_init(this.n_hidden_arr[i],this.n_hidden_arr[i]));
         }
 
+        this.weights.push(MMath.xavier_init(this.n_hidden_arr[this.n_hidden_arr.length - 1],this.n_outputs));
     }
 
     initialize_biases(){
@@ -96,119 +102,29 @@ class MLP {
 
         for (let i = 0; i < this.n_hidden_arr.length; i++) {
             this.biases.push(MMath.mat_filled_num(1,this.n_hidden_arr[i],0));
+            this.hidden_nodes_prev.push(MMath.mat_filled_num(1,this.n_hidden_arr[i],0));
         }
 
         this.biases.push(MMath.mat_filled_num(1,this.n_outputs,0));
-
     }
 
     feedforward(inputs){
         this.input_nodes = inputs;
         this.hidden_nodes = [];
+    
+        let last_calc = inputs;
 
-        if(this.n_hidden_arr.length > 0){
-            
-            this.hidden_nodes.push(this.activate(
-                MMath.mat_add(
-                    MMath.mat_mult(this.input_nodes,this.weights[0]),
-                    this.biases[0])
-                ,this.hidden_activation)
+        for(let i = 1; i < this.n_hidden_arr.length; i++){
+            let sum = MMath.mat_add(
+                MMath.mat_mult(last_calc,weights[i]),
+                MMath.mat_mult(this.hidden_nodes_prev[i],this.weights_previous[i])
             );
-            
-            for (let i = 1; i < this.n_hidden_arr.length; i++) {
-                   
-                this.hidden_nodes.push(this.activate(
-                    MMath.mat_add(
-                        (MMath.mat_mult(this.hidden_nodes[this.hidden_nodes.length - 1],this.weights[i])),
-                        this.biases[i])
-                    ,this.hidden_activation)
-                );         
 
-            }
-
-            this.output_nodes = 
-            this.activate(MMath.mat_add(
-                    MMath.mat_mult(this.hidden_nodes[this.hidden_nodes.length - 1],this.weights[this.weights.length - 1]),
-                    this.biases[this.biases.length-1]
-                ),this.output_activation);
-
+            this.hidden_nodes.push(this.activate(MMath.mat_add(sum,this.bias[i]))) 
         }
-        else{
-            this.output_nodes = this.activate(MMath.mat_add(MMath.mat_mult(this.input_nodes,this.weights[0]),this.biases[0]),this.output_activation);
-        }
-        
-        return this.output_nodes;
     }
 
     backprop(actual_outputs){
-
-        let bias_deltas   = [];
-        let weight_deltas = [];
-
-        // dL/da * da/dz
-        let output_error = null;
-        if(this.output_activation == "softmax"){
-            output_error = MMath.mat_mult(
-                MMath.mat_mult_num(
-                    MMath.mat_sub(this.output_nodes,actual_outputs)
-                    ,2),
-                this.derivate_activate(this.output_nodes,this.output_activation)
-            );
-        }else{
-            output_error = MMath.mat_one_to_one_mult(
-                MMath.mat_mult_num(
-                    MMath.mat_sub(this.output_nodes,actual_outputs)
-                    ,2),
-                this.derivate_activate(this.output_nodes,this.output_activation)
-            );
-        }
-
-        if(output_error == null) {console.trace("error, output_error not computed");throw("output_error");}
-
-        
-        bias_deltas.unshift(output_error);
-
-        //Take into account the hidden layer
-        if(this.n_hidden_arr.length > 0){
-
-            let curr_error = output_error;
-
-            for(let i = this.n_hidden_arr.length - 1; i >= 0; i--){
-
-                weight_deltas.unshift(MMath.mat_mult(
-                    MMath.transpose(this.hidden_nodes[i]),
-                    curr_error
-                ));
-                
-                curr_error = MMath.mat_one_to_one_mult(
-                    MMath.mat_mult(curr_error , MMath.transpose(this.weights[i + 1])),
-                    this.derivate_activate(this.hidden_nodes[i],this.hidden_activation)
-                );
-                bias_deltas.unshift(curr_error);
-
-            }
-
-            weight_deltas.unshift(MMath.mat_mult(
-                MMath.transpose(this.input_nodes),
-                curr_error
-            ));
-
-        }
-        else{
-
-            weight_deltas.unshift(MMath.mat_mult(
-                MMath.transpose(this.input_nodes),
-                output_error
-            ));
-
-        }
-
-        // //Update the weights/biases with the deltas
-        for(let i = 0; i < this.weights.length; i++){
-
-            this.weights[i] = MMath.mat_sub(this.weights[i],MMath.mat_mult_num(weight_deltas[i],this.learning_rate));
-            this.biases[i] = MMath.mat_sub(this.biases[i],MMath.mat_mult_num(bias_deltas[i],this.learning_rate));
-        }
 
     }
 
@@ -445,4 +361,4 @@ class MMath{
     }
 }
 
-module.exports = {MLP,MMath};
+// module.exports = {MLP,MMath};
