@@ -22,6 +22,16 @@ class MLP {
         this.initialize_biases();
     }
 
+    // returns the current state of all the nodes of the network
+    copy(){
+        return {
+            input_nodes : clone(this.input_nodes),
+            hidden_nodes : clone(this.hidden_nodes),
+            hidden_nodes_prev : clone(this.hidden_nodes_prev) ,
+            output_nodes : clone(this.output_nodes)
+        };
+    }
+
     activate(x,activation_name) {
 
         if(Array.isArray(x) && activation_name != "softmax") return x.map((y) => {return this.activate(y,activation_name);});
@@ -122,7 +132,7 @@ class MLP {
             );
 
             last_calc = this.activate(MMath.mat_add(sum,this.biases[i]), this.hidden_activation);
-            this.hidden_nodes_prev[i] = last_calc;
+            // this.hidden_nodes_prev[i] = last_calc;
             this.hidden_nodes[i] = last_calc;
         }
         this.output_nodes = this.activate(
@@ -134,12 +144,108 @@ class MLP {
         return this.output_nodes;
     }
 
-    backprop(actual_outputs){
-           
+    backprop(inputs,actual_outputs,do_batch){
+        if(!Array.isArray(inputs[0])) inputs = inputs.map((x) => [x]);
+        
+        let states = [];
+        for(let t = 0; t < inputs.length; t++){
+            this.feedforward(inputs[t]);
+            states.push(this.copy());
+
+            // Compute the error : dL/d(ot)
+            let output_error = null;
+            if(this.output_activation == "softmax"){
+                output_error = MMath.mat_mult(
+                    MMath.mat_mult_num(
+                        MMath.mat_sub(this.output_nodes,actual_outputs[t])
+                        ,2),
+                    this.derivate_activate(this.output_nodes,this.output_activation)
+                );
+            }else{
+                output_error = MMath.mat_one_to_one_mult(
+                    MMath.mat_mult_num(
+                        MMath.mat_sub(this.output_nodes,actual_outputs[t])
+                        ,2),
+                    this.derivate_activate(this.output_nodes,this.output_activation)
+                );
+            }
+
+            // Compute the gradient for V
+            // Gradient of output bias is just output_error
+            let grad_wo = MMath.mat_mult(
+                MMath.transpose(this.hidden_nodes[this.hidden_nodes.length - 1]),
+                output_error
+            );
+
+            // Compute the gradient for W
+            //First compute sum of dht/dw
+            //For that, we need a function that can compute dhT/dht
+
+            // [dH1/dh0 , dH2/dH1, ... , dHt/dHt-1]
+            let dht_1_dht_t = [];
+            for (let k = 0; k < states.length; k++) {
+                dht_1_dht_t.push(MMath.mat_mult(
+                    // 1 - ht^2
+                    MMath.mat_add_num(
+                        MMath.mat_mult_num(
+                            MMath.mat_one_to_one_mult(states[k].hidden_nodes[0],states[k].hidden_nodes[0]),
+                            -1),
+                        1
+                    ),
+                    // W^T
+                    MMath.transpose(this.weights_previous[0])
+                ));
+            }
+
+            let sum = MMath.mat_filled_num(1,states[states.length-1].hidden_nodes[0].length,0);
+            for (let k = 0; k < states.length; k++) {
+                
+                let dhT_dht = MMath.mat_filled_num(1,dht_1_dht_t[0].length,1); 
+                // Computing dhT/dht
+                for (let i = 0 ; i < k ;i++) {
+                    dhT_dht = MMath.mat_one_to_one_mult(dhT_dht,dht_1_dht_t[i]);
+                }
+
+                sum = MMath.mat_add(
+                    MMath.mat_one_to_one_mult(
+                        // 1 - ht^2
+                        MMath.mat_add_num(
+                            MMath.mat_mult_num(
+                                MMath.mat_one_to_one_mult(states[k].hidden_nodes[0],states[k].hidden_nodes[0]),
+                                -1),
+                            1
+                        ),
+                        // ht-1
+                        states[k].hidden_nodes_prev[0]
+                    ),
+                    sum
+                );
+            }
+
+            let grad_whp = MMath.mat_mult(
+                MMath.transpose(sum),
+                MMath.mat_mult(
+                    output_error,
+                    MMath.transpose(this.weights[this.weights.length - 1])
+                )
+            )
+                
+            console.log(grad_wo,grad_whp)
+
+            //Update the previous hidden nodes 
+            this.hidden_nodes_prev = clone(this.hidden_nodes);
+        }
+
+
+        // console.log(states);
     }
 
 
 
+}
+
+function clone(obj){
+    return JSON.parse(JSON.stringify(obj));
 }
 
 class MMath{
@@ -161,6 +267,9 @@ class MMath{
     // if(Array.isArray(m1[0]) && Array.isArray(m2[0])) return this.dot_product(m1,m2); 
 
     static mat_mult(m1,m2){
+
+        if(!Array.isArray(m1)) m1 = [m1];
+        if(!Array.isArray(m2)) m2 = [m2];
 
         if(!Array.isArray(m1[0])) m1 = [m1];
         if(!Array.isArray(m2[0])) m2 = [m2];
@@ -192,7 +301,10 @@ class MMath{
     }
 
     static mat_add(m1,m2,add = 1){
-        
+
+        if(!Array.isArray(m1)) m1 = [m1];
+        if(!Array.isArray(m2)) m2 = [m2];
+
         if(!Array.isArray(m1[0])) m1 = [m1];
         if(!Array.isArray(m2[0])) m2 = [m2];
         
@@ -219,6 +331,7 @@ class MMath{
 
     static mat_add_num(m1,num,add = 1){
         
+        if(!Array.isArray(m1)) m1 = [m1];
         
         if(!Array.isArray(m1[0])) m1 = [m1];
         
@@ -244,6 +357,8 @@ class MMath{
     }
 
     static mat_mult_num(m1,num){
+        if(!Array.isArray(m1)) m1 = [m1];
+
         if(!Array.isArray(m1[0])) m1 = [m1];
 
         let res = [];
@@ -313,6 +428,7 @@ class MMath{
 
     static transpose(mat){
 
+        if(!Array.isArray(mat)) mat = [mat];
         if(!Array.isArray(mat[0])) mat = [mat];
         
         let result = [];
@@ -332,6 +448,8 @@ class MMath{
     }
 
     static mat_one_to_one_mult(m1,m2){
+        if(!Array.isArray(m1)) m1 = [m1];
+        if(!Array.isArray(m2)) m2 = [m2];
 
         if(!Array.isArray(m1[0])) m1 = [m1];
         if(!Array.isArray(m2[0])) m2 = [m2];
