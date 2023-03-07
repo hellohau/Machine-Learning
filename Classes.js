@@ -111,21 +111,31 @@ class MLP {
     feedforward(inputs){
         this.input_nodes = inputs;
         this.hidden_nodes = [];
+        let len = this.n_hidden_arr.length;
     
         let last_calc = inputs;
 
-        for(let i = 1; i < this.n_hidden_arr.length; i++){
+        for(let i = 0; i < len; i++){
             let sum = MMath.mat_add(
-                MMath.mat_mult(last_calc,weights[i]),
+                MMath.mat_mult(last_calc,this.weights[i]),
                 MMath.mat_mult(this.hidden_nodes_prev[i],this.weights_previous[i])
             );
 
-            this.hidden_nodes.push(this.activate(MMath.mat_add(sum,this.bias[i]))) 
+            last_calc = this.activate(MMath.mat_add(sum,this.biases[i]), this.hidden_activation);
+            this.hidden_nodes_prev[i] = last_calc;
+            this.hidden_nodes[i] = last_calc;
         }
+        this.output_nodes = this.activate(
+        MMath.mat_add(
+            MMath.mat_mult(this.hidden_nodes[len-1],this.weights[len]),           
+            this.biases[len]        
+        ),this.output_activation);
+
+        return this.output_nodes;
     }
 
     backprop(actual_outputs){
-
+           
     }
 
 
