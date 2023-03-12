@@ -1,3 +1,4 @@
 # Machine-Learning
 
-This is the current main project line.
+This is LSTM, or the first time I use tensorflow to do stuff rather than coding everything from scratch
+
